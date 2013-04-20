@@ -1,0 +1,5 @@
+cmake_minimum_required( VERSION 2.6 )
+set ( CMAKE_BUILD_TYPE Release )
+add_definitions ( -Wall )
+add_subdirectory( proj_geom )
+add_subdirectory( cppunit )
