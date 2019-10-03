@@ -9,8 +9,9 @@
 #ifndef FUN_RATIONAL_HPP
 #define FUN_RATIONAL_HPP 1
 
-#include <sstream>
 #include <cassert>
+#include <type_traits> // is_integral<T>
+#include <boost/operators.hpp>
 
 namespace fun 
 {
@@ -24,242 +25,269 @@ namespace fun
    */
 
   // Forward declarations.
-  template<typename _Z> struct rational;
+  //template<typename _Z> struct rational;
 
+  /// greatest common divider
+  template<typename _Z, class = typename
+	    std::enable_if<std::is_integral<_Z>::value>::type> 
+  //xxx requires is_integral<_Z>::value
+  inline constexpr _Z gcd(const _Z& a, const _Z& b) noexcept
+  { return b == _Z(0) ? abs(a) : gcd(b, a%b); }
+  
   /** 
    *  Rational number. 
    *
    *  @param  Z  Type of rational number elements
+   *  @todo unit testing
    */
-  template <typename _Z = int>
-    struct rational
+  template <typename _Z, class = typename
+	    std::enable_if<std::is_integral<_Z>::value>::type>
+  //xxx requires is_integral<_Z>::value
+  struct rational : boost::ordered_field_operators<rational<_Z>,
+		    boost::ordered_field_operators2<rational<_Z>, _Z> >
+  {
+    /// Value typedef.
+    typedef _Z value_type;
+    
+    /// Default constructor.
+    ///  Unspecified parameters default to 0.
+    explicit 
+    rational(const _Z& p = _Z(), const _Z& q = _Z(1)) 
+      : _num{p}, _denom{q} 
     {
-      /// Value typedef.
-      typedef _Z value_type;
- 
-      /// Default constructor.
-      ///  Unspecified parameters default to 0.
-      rational(const _Z& p = _Z(), const _Z& q = _Z(1)) : _p(p), _q(q) { }
+      assert(!(_num == _Z(0) && _denom == _Z(0)));
+      normalize(); 
+    }
 
-      // Lets the compiler synthesize the copy constructor
-      // rational (const rational<_Z>&);
-      /// Copy constructor
-      template<typename _Up>
-      rational(const rational<_Up>& s) : _p(s.nom()), _q(s.denom()) { }
+    // Lets the compiler synthesize the copy constructor
+    //rational (const rational<_Z>&) = default;
 
-      /// Return first element of rational number.
-      constexpr _Z nom() { return _p; }
-
-      /// Return second element of rational number.
-      constexpr _Z denom() { return _q; }
-
-      /// Normalize rational number.
-      void normalize() { if (_q < _Z()) { _p = -_p; _q = -_q; } }
-
-      // Lets the compiler synthesize the assignment operator
-      // rational<_Z>& operator= (const rational<_Z>&);
-      /// Assign this rational number to rational number @a s.
-      template<typename _Up>
-      rational<_Z>& operator=(const rational<_Up>& s)
-      { _p = s.nom(); _q = s.denom(); return *this; }
-
-      /// Add @a s to this rational number.
-      template<typename _Up>
-      rational<_Z>& operator+=(const rational<_Up>& s)
-      { 
-        _p = _p * s.denom() + _q * s.nom(); 
-        _q = _q * s.denom();
-        normalize(); 
-        return *this;
-      }
-
-      /// Subtract @a s from this rational number.
-      template<typename _Up>
-      rational<_Z>& operator-=(const rational<_Up>& s)
-      { 
-        _p = _p * s.denom() - _q * s.nom(); 
-        _q = _q * s.denom();
-        return *this;
-      }
-
-      /// Multiply @a s to this rational number.
-      template<typename _Up>
-      rational<_Z>& operator*=(const rational<_Up>& s)
-      { 
-        _p *= s.nom(); 
-        _q *= s.denom();
-        return *this;
-      }
-
-      /// Divide @a s to this rational number.
-      template<typename _Up>
-      rational<_Z>& operator/=(const rational<_Up>& s)
-      { 
-        _p *= s.denom(); 
-        _q *= s.nom();
-        return *this;
-      }
-
-      /// Add @a s to this rational number.
-      rational<_Z>& operator+=(const _Z& a)
-      { _p += _q * a; return *this; }
-
-      /// Subtract @a s from this rational number.
-      rational<_Z>& operator-=(const _Z& a)
-      { _p -= _q * a; return *this; }
-
-      /// Multiply this rational number by @a a.
-      rational<_Z>& operator*=(const _Z& a) 
-      { _p *= a; return *this; }
-
-      /// Divide this rational number by @a a.
-      rational<_Z>& operator/=(const _Z& a) 
-      { _q *= a; return *this; }
+    /// Copy constructor
+    template<typename _Up>
+    explicit constexpr 
+    rational(const rational<_Up>& s) noexcept 
+      : _num{s.num()}, _denom{s.denom()} 
+    { }
     
-
-    private:
-      _Z _p;
-      _Z _q;
+    /// Return first element of rational number.
+    constexpr _Z num() const noexcept { return _num; }
     
-    };
+    /// Return second element of rational number.
+    constexpr _Z denom() const noexcept { return _denom; }
+    
+    // Lets the compiler synthesize the assignment operator
+    // rational<_Z>& operator= (const rational<_Z>&);
+    /// Assign this rational number to rational number @a s.
+    template<typename _Up>
+    rational<_Z>& operator=(const rational<_Up>& s)
+    { _num = s.num(); _denom = s.denom(); return *this; }
 
+    /// Increase this rational number (prefix operator)
+    rational<_Z>& operator++()
+    { _num += _denom; return *this; }
+
+    /// Decrease this rational number (prefix operator)
+    rational<_Z>& operator--()
+    { _num -= _denom; return *this; }
+
+    /// Increase this rational number (postfix operator)
+    rational<_Z> operator++(int)
+    { rational<_Z> res(*this); ++(*this); return res; }
+
+    /// Decrease this rational number (postfix operator)
+    rational<_Z> operator--(int)
+    { rational<_Z> res(*this); --(*this); return res; }
+        
+    /// Add @a s to this rational number.
+    rational<_Z>& operator+=(const _Z& a)
+    { _num += _denom * a; return *this; }
+
+    /// Subtract @a s from this rational number.
+    rational<_Z>& operator-=(const _Z& a)
+    { _num -= _denom * a; return *this; }
+    
+    /// Multiply this rational number by @a a.
+    rational<_Z>& operator*=(const _Z& a) 
+    { _num *= a; normalize(); return *this; }
+    
+    /// Divide this rational number by @a a.
+    rational<_Z>& operator/=(const _Z& a) 
+    { _denom *= a; normalize(); return *this; }
+
+    /// Add @a s to this rational number.
+    template<typename _Up>
+    rational<_Z>& operator+=(const rational<_Up>& s)
+    { 
+      _num = _num * s.denom() + _denom * s.num(); 
+      _denom *= s.denom();
+      normalize(); 
+      return *this;
+    }
+
+    /// Subtract @a s from this rational number.
+    template<typename _Up>
+    rational<_Z>& operator-=(const rational<_Up>& s)
+    { 
+      _num = _num * s.denom() - _denom * s.num(); 
+      _denom *= s.denom();
+      normalize();
+      return *this;
+    }
+
+    /// Multiply @a s to this rational number.
+    template<typename _Up>
+    rational<_Z>& operator*=(const rational<_Up>& s)
+    { 
+      _num *= s.num(); 
+      _denom *= s.denom();
+      normalize();
+      return *this;
+    }
+
+    /// Divide @a s to this rational number.
+    template<typename _Up>
+    rational<_Z>& operator/=(const rational<_Up>& s)
+    {
+      *this *= rational<_Z>(s.denom(), s.num());
+      return *this;
+    }
+
+    /// Cast to double
+    operator double () const { return double(num()) / denom(); }
+
+  private:
+    /// Normalize rational number.
+    void normalize() { 
+      if (_denom < _Z()) { 
+	      _num = -_num; 
+	      _denom = -_denom; 
+      } 
+      _Z g = gcd(_num, _denom);
+      _num /= g;
+      _denom /= g;
+    }
+    
+  private:
+    _Z _num;
+    _Z _denom;
+    
+  };
+  
   // Operators:
   ///  Return new rational number @a r plus @a s.
-  template<typename _Z>
-    inline rational<_Z>
-    operator+(const rational<_Z>& r, const rational<_Z>& s)
-    {
-      rational<_Z> res = r;
-      res += s;
-      return res;
-    }
+  template<typename _Z, typename _Up>
+  inline auto
+  operator+(const rational<_Z>& r, const rational<_Up>& s) 
+    -> rational<decltype(r.num()*s.denom())>
+  {
+    auto num = r.num() * s.denom() + r.denom() * s.num(); 
+    decltype(num) denom =  r.denom() * s.denom();
+    return rational<decltype(num)> {num, denom}; 
+  }
 
-  ///  Return new rational number @a r minus @a s.
-  template<typename _Z>
-    inline rational<_Z>
-    operator-(const rational<_Z>& r, const rational<_Z>& s)
-    {
-      rational<_Z> res = r;
-      res -= s;
-      return res;
-    }
+  ///  Return new rational number @a r plus @a s.
+  template<typename _Z, typename _Up>
+  inline auto
+  operator-(const rational<_Z>& r, const rational<_Up>& s) 
+    -> rational<decltype(r.denom()*s.denom())>
+  {
+    //auto num = r.num() * s.denom() - r.denom() * s.num(); 
+    //decltype(num) denom =  r.denom() * s.denom();
+    return rational<decltype(r.denom()*s.denom())> 
+      { r.num() * s.denom() - r.denom() * s.num(),
+	r.denom() * s.denom() }; 
+  }
 
-  //@{
-  ///  Return new rational number @a r times @a a.
-  template<typename _Z>
-    inline rational<_Z>
-  operator*(const rational<_Z>& r, const rational<_Z>& s)
-    {
-      rational<_Z> res = r;
-      res *= s;
-      return res;
-    }
-
-  template<typename _Z>
-    inline rational<_Z>
-    operator*(const rational<_Z>& r, const _Z& a)
-    {
-      rational<_Z> res = r;
-      res *= a;
-      return res;
-    }
-
-  template<typename _Z>
-    inline rational<_Z>
-    operator*(const _Z& a, const rational<_Z>& r)
-    {
-      rational<_Z> res = r;
-      res *= a;
-      return res;
-    }
-  //@}
-
-  ///  Return new rational number @a r divided by @a a.
-  template<typename _Z>
-    inline rational<_Z>
-    operator/(const rational<_Z>& r, const _Z& a)
-    {
-      rational<_Z> res = r;
-      res /= a;
-      return res;
-    }
-
+  ///  Return new rational number @a r times @a s.
+  template<typename _Z, typename _Up>
+  inline auto
+  operator*(const rational<_Z>& r, const rational<_Up>& s)
+    -> rational<decltype(r.num()*s.num())>
+  {
+    return rational<decltype(r.num()*s.num())> 
+      { r.num()*s.num(), r.denom()*s.denom() };
+  }
+  
+  ///  Return new rational number @a r times @a s.
+  template<typename _Z, typename _Up>
+  inline auto 
+  operator/(const rational<_Z>& r, const rational<_Up>& s)
+    -> decltype(r * s) 
+  {
+    return r * rational<_Up>(s.denom(), s.num());
+  }
+  
+  //xxx ///  Return new rational number @a r minus @a s.
+  //xxx template<typename _Z>
+  //xxx inline rational<_Z>
+  //xxx operator-(rational<_Z> r, const rational<_Z>& s) { return r -= s; }
+  //xxx 
+  //xxx //@{
+  //xxx ///  Return new rational number @a r times @a a.
+  //xxx template<typename _Z>
+  //xxx inline rational<_Z>
+  //xxx operator*(rational<_Z> r, const rational<_Z>& s) { return r *= s; }
+  //xxx 
+  //xxx template<typename _Z>
+  //xxx inline rational<_Z>
+  //xxx operator*(rational<_Z> r, const _Z& a) { return r *= a; }
+  //xxx 
+  //xxx template<typename _Z>
+  //xxx inline rational<_Z>
+  //xxx operator*(const _Z& a, rational<_Z> r) { return r *= a; }
+  //xxx //@}
+  //xxx 
+  //xxx ///  Return new rational number @a r divided by @a a.
+  //xxx template<typename _Z>
+  //xxx inline rational<_Z>
+  //xxx operator/(rational<_Z> r, const _Z& a) { return r /= a; }
+  
   /// Return @a r.
   template<typename _Z>
-    inline rational<_Z>
-    operator+(const rational<_Z>& r)
-    { return r; }
+  inline constexpr rational<_Z>
+  operator+(const rational<_Z>& r) noexcept { return r; }
 
   /// Return negation of @a r
   template<typename _Z>
-    inline rational<_Z>
-    operator-(const rational<_Z>& r)
-    { return rational<_Z>(-r.nom(), r.denom()); }
-
+  inline constexpr rational<_Z>
+  operator-(const rational<_Z>& r) noexcept
+  { return rational<_Z>(-r.num(), r.denom()); }
+  
   /// Return true if @a r is equal to @a s.
-  template<typename _Z>
-    inline bool
-    operator==(const rational<_Z>& r, const rational<_Z>& s)
-    { 
-      assert(!(r.nom() == 0 && r.denom() == 0)); // NaN
-      assert(!(s.nom() == 0 && s.denom() == 0)); // NaN
-      return r.nom() * s.denom() == r.denom() * s.nom(); // -Inf == +Inf ???
-    }
+  template<typename _Z, typename _Up>
+  inline bool
+  operator==(const rational<_Z>& r, const rational<_Up>& s)
+  { 
+    assert(!(r.num() == 0 && r.denom() == 0)); // NaN
+    assert(!(s.num() == 0 && s.denom() == 0)); // NaN
+    return r.num() == s.num() && s.denom() == r.denom();
+  }
 
   /// Return false if @a r is equal to @a s.
-  template<typename _Z>
-    inline bool
-    operator!=(const rational<_Z>& r, const rational<_Z>& s)
-    { return !(r == s); }
+  template<typename _Z, typename _Up>
+  inline constexpr bool
+  operator!=(const rational<_Z>& r, const rational<_Up>& s) noexcept
+  { return !(r == s); }
 
   /// Return true if @a r is less than @a s.
-  template<typename _Z>
-    inline bool
-    operator<(const rational<_Z>& r, const rational<_Z>& s)
-    { 
-      assert(!(r.nom() == 0 && r.denom() == 0)); // NaN
-      assert(!(s.nom() == 0 && s.denom() == 0)); // NaN
-      _Z a = r.nom();
-      _Z b = r.denom();
-      _Z c = s.nom();
-      _Z d = s.denom();
-      if (b < 0) { a = -a; b = -b; }
-      if (d < 0) { c = -c; d = -d; }
-      return a*d < b*c; // problem with -\Inf, +Inf
-    }
+  template<typename _Z, typename _Up>
+  inline constexpr bool
+  operator<(const rational<_Z>& r, const rational<_Up>& s) noexcept
+  { return r.num()*s.denom() < r.denom()*s.num(); }
 
   ///  Insertion operator for rational number values.
-  template<typename _Z, typename _CharT, class _Traits>
-    std::basic_ostream<_CharT, _Traits>&
-    operator<<(std::basic_ostream<_CharT, _Traits>& os, const rational<_Z>& r)
-    {
-      std::basic_ostringstream<_CharT, _Traits> s;
-      s.flags(os.flags());
-      s.imbue(os.getloc());
-      s.precision(os.precision());
-      const _Z a = r.nom();
-      const _Z b = r.denom();
-      if (a == 0) {
-        if (b == 0) {
-          s << "NaN";
-        } else {
-          s << '0';
-        }
-      } else {
-        if (b == 0) {
-          if (a > 0) {
-            s << "Inf";
-          } else {
-            s << "-Inf";
-          } 
-	} else if (b == 1) {
-          s << a;
-        } else {
-          s << '(' << a << '/' << b << ')';
-        }
-      }
-      return os << s.str();
-    }
+  template<typename _Z, class _Stream>
+  _Stream& operator<<(_Stream& os, const rational<_Z>& r)
+  {
+    const auto& a = r.num();
+    const auto& b = r.denom();
+    _Z zero(0), one(1);
+    if (b == one)  { os << a; return os; }
+    if (b != zero) { os << '(' << a << '/' << b << ')'; return os; }
+    if (a < zero)  { os << "-Inf"; return os; }
+    if (a > zero)  { os << "Inf"; return os; }
+    os << "NaN"; return os;
+  }
 
 }
 
